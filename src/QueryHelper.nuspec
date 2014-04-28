@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>$id$</id>
+    <version>$version$</version>
+    <title>$title$</title>
+    <authors>$author$</authors>
+    <licenseUrl>http://www.apache.org/licenses/LICENSE-2.0.html</licenseUrl>
+    <projectUrl>https://github.com/ctigeek/QueryHelper</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <releaseNotes>First release in a nuget package.</releaseNotes>
+    <copyright>Copyright 2014 Steven Swenson</copyright>
+	<description>A tool for managing connections, transactions, and data readers.</description>
+    <tags>SQL Query</tags>
+  </metadata>
+</package>
