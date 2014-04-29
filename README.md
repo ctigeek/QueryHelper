@@ -1,9 +1,12 @@
-CSharpQueryHelper
+QueryHelper
 =================
+This project was moved from CSharpQueryHelper.
+It's now a library & nuget package. I renamed it to be more language agnostic.
 
-A class that utilizes functional constructs to help manage sql connections, commands, parameters, and transactions.
+Nuget page: https://www.nuget.org/packages/QueryHelper/
 
-No nuget package needed. Just copy QueryHelper.cs into your solution.
+QueryHelper is a small lightweight library that utilizes functional constructs to help you run queries.
+It manages all your sql connections, commands, parameters, and transactions.
 
 All you do is supply: 
 1. a connection string.
