@@ -9,7 +9,7 @@ using System.Configuration;
 
 namespace QueryHelper
 {
-    public class QueryRunner : IQueryRunner, IDisposable
+    public class QueryRunner : IQueryRunner
     {
         public readonly string ConnectionString;
         public readonly string DataProvider;
@@ -101,10 +101,6 @@ namespace QueryHelper
             DbConnection connection = null;
             try
             {
-                if (TransactionOpen && withTransaction)
-                {
-                    throw new ArgumentException("If an external transaction is open, then withTransaction parameter must be set to `true`.");
-                }
                 connection = await GetOpenConnectionAsync();
                 if (withTransaction && !TransactionOpen)
                 {

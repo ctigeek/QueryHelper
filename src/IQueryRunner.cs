@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace QueryHelper
 {
-    public interface IQueryRunner : ITransactable
+    public interface IQueryRunner : ITransactable, IDisposable
     {
         Action<string, System.Diagnostics.TraceEventType> LogMessage { get; set; }
         bool DebugLoggingEnabled { get; set; }
