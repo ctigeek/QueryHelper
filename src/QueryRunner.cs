@@ -346,6 +346,7 @@ namespace QueryHelper
             command.Connection = connection;
             AddParameters(command, query);
             command.CommandText = query.ModifiedSQL;
+            command.CommandType = query.CommandType;
             if (transaction != null)
             {
                 command.Transaction = transaction;

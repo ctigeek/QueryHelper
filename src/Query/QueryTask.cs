@@ -30,6 +30,7 @@ namespace QueryHelper
             this.ReaderTask = null;
             this.ScalerTask = scalerTask;
         }
+        //TODO: this needs refactoring... maybe a base class.
         public readonly SQLQuery Query;
         public readonly Task<int> NonQueryTask;
         public readonly Task<DbDataReader> ReaderTask;

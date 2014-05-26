@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -20,10 +21,12 @@ namespace QueryHelper
             OrderNumber = 0;
             CausedAbort = false;
             Executed = false;
+            CommandType = CommandType.Text;
         }
         public readonly Dictionary<string, object> Parameters;
         public readonly Dictionary<string, List<object>> InParameters;
         public readonly string OriginalSQL;
+        public CommandType CommandType { get; set; }
         public string ModifiedSQL { get; set; }
         public readonly SQLQueryType SQLQueryType;
         public int RowCount { get; set; }
