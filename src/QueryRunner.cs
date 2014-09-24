@@ -176,8 +176,11 @@ namespace QueryHelper
             if (!TransactionOpen)
             {
                 persistentConnection = null;
-                connection.Close();
-                connection.Dispose();
+                if (connection != null)
+                {
+                    connection.Close();
+                    connection.Dispose();
+                }
             }
         }
 
