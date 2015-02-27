@@ -85,16 +85,65 @@ namespace QueryHelper
         {
             RunQuery(new[] { query }, TransactionOpen);
         }
-        public void RunQuery(IEnumerable<SQLQuery> queries, bool withTransaction = false)
-        {
-            RunQueryAsync(SetQueryGroupsForSyncOperation(queries), withTransaction)
-                .Wait();
-        }
-
+        
         public async Task RunQueryAsync(SQLQuery query)
         {
             await RunQueryAsync(new[] { query }, TransactionOpen);
         }
+
+        public void RunQuery(IEnumerable<SQLQuery> queries, bool withTransaction = false)
+        {
+            DbTransaction transaction = null;
+            DbConnection connection = null;
+            try
+            {
+                ValidateQueriesForSync(queries);
+                connection = GetOpenConnection();
+                if (withTransaction && !TransactionOpen)
+                {
+                    transaction = GetTransaction(connection);
+                }
+                foreach (var groupNum in queries.Select(q => q.GroupNumber).Distinct().OrderBy(gn => gn).ToArray())
+                {
+                    var taskList = BuildQueryTaskList(queries, groupNum, connection, transaction);
+                    Task.WaitAll(taskList.Select(qt => qt.Task).ToArray());
+                    foreach (var queryTask in taskList)
+                    {
+                        if (queryTask.Query.SQLQueryType == SQLQueryType.DataReader)
+                        {
+                            ProcessReadQuery(queryTask);
+                        }
+                        else
+                        {
+                            ProcessQuery(queryTask);
+                        }
+                        queryTask.Query.CausedAbort = !queryTask.Query.PostQueryProcess(queryTask.Query);
+                    }
+                    if (taskList.Exists(qt => qt.Query.CausedAbort == true))
+                    {
+                        break;
+                    }
+                }
+                CommitDbTransaction(transaction);
+            }
+            catch (Exception exception)
+            {
+                try
+                {
+                    RollbackDbTransaction(transaction);
+                }
+                catch (Exception rollbackException)
+                {
+                    throw new AggregateException(exception, rollbackException);
+                }
+                throw;
+            }
+            finally
+            {
+                CloseConnection(connection);
+            }
+        }
+
         public async Task RunQueryAsync(IEnumerable<SQLQuery> queries, bool withTransaction = false)
         {
             DbTransaction transaction = null;
@@ -106,14 +155,9 @@ namespace QueryHelper
                 {
                     transaction = GetTransaction(connection);
                 }
-                foreach (var groupNum in queries.Select(q => q.GroupNumber).Distinct().OrderBy(gn => gn))
+                foreach (var groupNum in queries.Select(q => q.GroupNumber).Distinct().OrderBy(gn => gn).ToArray())
                 {
-                    var taskList = new List<QueryTask>();
-                    foreach (var query in queries.Where(q => q.GroupNumber == groupNum).OrderBy(q => q.OrderNumber))
-                    {
-                        var queryTask = ExecuteQuery(query, connection, transaction);
-                        taskList.Add(queryTask);
-                    }
+                    var taskList = BuildQueryTaskList(queries, groupNum, connection, transaction);
                     await Task.WhenAll(taskList.Select(qt => qt.Task));
                     foreach (var queryTask in taskList)
                     {
@@ -134,19 +178,31 @@ namespace QueryHelper
                 }
                 CommitDbTransaction(transaction);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
                 try
                 {
                     RollbackDbTransaction(transaction);
                 }
-                catch { }
+                catch (Exception rollbackException)
+                {
+                    throw new AggregateException(exception, rollbackException);
+                }
                 throw;
             }
             finally
             {
                 CloseConnection(connection);
             }
+        }
+
+        private List<QueryTask> BuildQueryTaskList(IEnumerable<SQLQuery> queries, int groupNum, DbConnection connection, DbTransaction transaction)
+        {
+            return queries
+                .Where(q => q.GroupNumber == groupNum)
+                .OrderBy(q => q.OrderNumber)
+                .Select(query => ExecuteQuery(query, connection, transaction))
+                .ToList();
         }
 
         private void RollbackDbTransaction(DbTransaction transaction)
@@ -162,6 +218,14 @@ namespace QueryHelper
             if (!TransactionOpen && transaction != null)
             {
                 transaction.Commit();
+            }
+        }
+
+        private void ValidateQueriesForSync(IEnumerable<SQLQuery> queries)
+        {
+            if (queries.Any(q => q.ProcessRowAsync != null))
+            {
+                throw new ArgumentException("SQLQuery.ProcessRowAsync must be null when calling RunQuery. It can only be non-null when calling RunQueryAsync.");
             }
         }
 
@@ -184,6 +248,24 @@ namespace QueryHelper
             }
         }
 
+        private DbConnection GetOpenConnection()
+        {
+            if (TransactionOpen && persistentConnection != null)
+            {
+                return persistentConnection;
+            }
+            else
+            {
+                var conn = CreateConnection();
+                conn.Open();
+                if (TransactionOpen)
+                {
+                    persistentConnection = conn;
+                }
+                return conn;
+            }
+        }
+
         private async Task<DbConnection> GetOpenConnectionAsync()
         {
             if (TransactionOpen && persistentConnection != null)
@@ -202,6 +284,26 @@ namespace QueryHelper
             }
         }
 
+        private void ProcessReadQuery(QueryTask queryTask)
+        {
+            if (queryTask.Query.SQLQueryType == SQLQueryType.DataReader)
+            {
+                queryTask.Query.RowCount = 0;
+                using (var reader = queryTask.ReaderTask.Result)
+                {
+                    while (reader.Read())
+                    {
+                        queryTask.Query.RowCount++;
+                        if (!queryTask.Query.ProcessRow(reader))
+                        {
+                            break;
+                        }
+                    }
+                    reader.Close();
+                }
+            }
+        }
+
         private async Task ProcessReadQueryAsync(QueryTask queryTask)
         {
             if (queryTask.Query.SQLQueryType == SQLQueryType.DataReader)
@@ -213,6 +315,10 @@ namespace QueryHelper
                     {
                         queryTask.Query.RowCount++;
                         if (!queryTask.Query.ProcessRow(reader))
+                        {
+                            break;
+                        }
+                        if (queryTask.Query.ProcessRowAsync != null && !await queryTask.Query.ProcessRowAsync(reader))
                         {
                             break;
                         }
@@ -361,7 +467,7 @@ namespace QueryHelper
         {
             if (LogMessage == null || !DebugLoggingEnabled) return;
 
-            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            var sb = new System.Text.StringBuilder();
             sb.AppendFormat("About to execute \"{0}\" ", query.ModifiedSQL);
             if (query.Parameters.Count > 0)
             {

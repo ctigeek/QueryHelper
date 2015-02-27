@@ -67,6 +67,7 @@ namespace QueryHelper
                 processRow = value;
             }
         }
+        public virtual Func<DbDataReader, Task<bool>> ProcessRowAsync { get; set; }
         private Func<SQLQuery, bool> postQueryProcess;
         public virtual Func<SQLQuery, bool> PostQueryProcess
         {
